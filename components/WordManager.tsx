@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { WordCategory, WordEntry, MergeStrategyConfig, WordTab, Scenario, AppView } from '../types';
 import { DEFAULT_MERGE_STRATEGY } from '../constants';
-import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckSquare, Square, ArrowRight, BookOpen, GraduationCap, CheckCircle, RotateCcw, FileDown, ChevronDown, Binary } from 'lucide-react';
+import { Upload, Download, Filter, Settings2, List, Search, Plus, Trash2, CheckSquare, Square, ArrowRight, BookOpen, GraduationCap, CheckCircle, RotateCcw, FileDown, ChevronDown, Binary, Briefcase } from 'lucide-react';
 import { MergeConfigModal } from './word-manager/MergeConfigModal';
 import { AddWordModal } from './word-manager/AddWordModal';
 import { WordList } from './word-manager/WordList';
@@ -384,6 +384,7 @@ export const WordManager: React.FC<WordManagerProps> = ({
         }
 
         const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
+        const targetScenarioId = selectedScenarioId === 'all' ? '1' : selectedScenarioId;
         
         let successCount = 0;
         let failCount = 0;
@@ -393,11 +394,13 @@ export const WordManager: React.FC<WordManagerProps> = ({
         const isDuplicate = (t: string, trans?: string) => {
             const existing = entries.some(e => 
                 e.text.toLowerCase() === t.toLowerCase() && 
-                (e.translation?.trim() === trans?.trim())
+                (e.translation?.trim() === trans?.trim()) &&
+                e.scenarioId === targetScenarioId
             );
             const inBatch = newEntriesToAdd.some(e => 
                 e.text.toLowerCase() === t.toLowerCase() && 
                 (e.translation?.trim() === trans?.trim())
+                // scenarioId matches because we are pushing all to targetScenarioId
             );
             return existing || inBatch;
         };
@@ -406,8 +409,6 @@ export const WordManager: React.FC<WordManagerProps> = ({
             if (!candidate.text || typeof candidate.text !== 'string' || candidate.text.includes('必填')) {
                 continue;
             }
-
-            const scenarioId = selectedScenarioId === 'all' ? '1' : selectedScenarioId;
 
             try {
                 if (isDuplicate(candidate.text, candidate.translation)) {
@@ -439,7 +440,7 @@ export const WordManager: React.FC<WordManagerProps> = ({
                     video: candidate.video,
                     category: targetCategory,
                     addedAt: Date.now(),
-                    scenarioId,
+                    scenarioId: targetScenarioId,
                     sourceUrl: candidate.sourceUrl
                 });
                 successCount++;
@@ -462,13 +463,16 @@ export const WordManager: React.FC<WordManagerProps> = ({
 
   const handleAddWord = async (entryData: Partial<WordEntry>) => {
       try {
+          const targetScenarioId = selectedScenarioId === 'all' ? '1' : selectedScenarioId;
+
           const isDuplicate = entries.some(e => 
               e.text.toLowerCase() === entryData.text?.toLowerCase() && 
-              e.translation?.trim() === entryData.translation?.trim()
+              e.translation?.trim() === entryData.translation?.trim() &&
+              e.scenarioId === targetScenarioId
           );
 
           if (isDuplicate) {
-              showToast(`"${entryData.text}" (${entryData.translation}) 已存在，未重复添加。`, 'warning');
+              showToast(`"${entryData.text}" (${entryData.translation}) 已存在于当前场景，未重复添加。`, 'warning');
               return;
           }
 
@@ -500,7 +504,7 @@ export const WordManager: React.FC<WordManagerProps> = ({
               video: entryData.video,
               category: targetCategory,
               addedAt: entryData.addedAt || Date.now(),
-              scenarioId: selectedScenarioId === 'all' ? '1' : selectedScenarioId,
+              scenarioId: targetScenarioId,
           };
 
           setEntries(prev => [newEntry, ...prev]);
@@ -541,9 +545,25 @@ export const WordManager: React.FC<WordManagerProps> = ({
       <Toast toast={toast} onClose={() => setToast(null)} />
 
       <div className="border-b border-slate-200 px-6 py-5 bg-slate-50 rounded-t-xl flex justify-between items-center flex-wrap gap-4">
-        <div>
-           <h2 className="text-xl font-bold text-slate-800">词汇库管理</h2>
-           <p className="text-sm text-slate-500 mt-1">管理、筛选及编辑您的个性化词库</p>
+        <div className="flex items-center gap-6">
+           <div>
+               <h2 className="text-xl font-bold text-slate-800">词汇库管理</h2>
+               <p className="text-sm text-slate-500 mt-1">管理、筛选及编辑您的个性化词库</p>
+           </div>
+           
+           {/* Scenario Switcher - Moved to Header */}
+           <div className="flex items-center bg-white border border-slate-300 rounded-lg px-3 py-1.5 shadow-sm hover:border-blue-300 transition-colors">
+                <Briefcase className="w-4 h-4 text-slate-500 mr-2" />
+                <span className="text-xs text-slate-400 mr-2 font-bold uppercase select-none">当前场景:</span>
+                <select 
+                    value={selectedScenarioId} 
+                    onChange={(e) => setSelectedScenarioId(e.target.value)}
+                    className="bg-transparent border-none text-sm font-bold text-slate-700 focus:ring-0 cursor-pointer py-0 pl-0 pr-8 min-w-[120px]"
+                >
+                    <option value="all">全部场景 (混合模式)</option>
+                    {scenarios.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+           </div>
         </div>
         <div>
            <Tooltip text="配置合并策略、显示内容及顺序">
@@ -605,20 +625,6 @@ export const WordManager: React.FC<WordManagerProps> = ({
                  </button>
               </div>
               
-              <div className="flex items-center space-x-2 border-l border-slate-200 pl-4">
-                  <Filter className="w-4 h-4 text-slate-400" />
-                  <select 
-                    value={selectedScenarioId}
-                    onChange={(e) => setSelectedScenarioId(e.target.value)}
-                    className="text-sm border-none bg-transparent focus:ring-0 text-slate-700 font-medium cursor-pointer hover:bg-slate-100 rounded"
-                  >
-                    <option value="all">所有场景</option>
-                    {scenarios.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-              </div>
-
               <div className="flex items-center space-x-2 border-l border-slate-200 pl-4 flex-1 max-w-xs">
                  <Search className="w-4 h-4 text-slate-400" />
                  <input 
