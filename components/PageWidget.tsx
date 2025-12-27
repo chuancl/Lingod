@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PageWidgetConfig, WordEntry, WordCategory, WordTab } from '../types';
 import { entriesStorage } from '../utils/storage';
@@ -14,7 +13,7 @@ interface PageWidgetProps {
   onBatchAddToLearning?: (ids: string[]) => void;
 }
 
-export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageWords, onBatchAddToLearning }) => {
+export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageWords, setPageWords, onBatchAddToLearning }) => {
   // Local UI State to prevent storage trashing during drag
   const [localConfig, setLocalConfig] = useState<PageWidgetConfig>(config);
   
@@ -157,6 +156,7 @@ export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageW
     const updatedEntries = allEntries.map(entry => {
         if (selectedWordIds.has(entry.id)) {
             // Find the enriched context from pageWords
+            // pageWords contains entries found on current page, potentially with captured context
             const pageContext = pageWords.find(pw => pw.id === entry.id);
             
             // Get fresh timestamped URL at the moment of action
@@ -165,7 +165,8 @@ export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageW
             return { 
                 ...entry, 
                 category: targetCategory,
-                // Merge context if available
+                // Merge context if available in pageWords
+                // Prefer pageWords context as it is freshly captured from the page
                 contextSentence: pageContext?.contextSentence || entry.contextSentence,
                 contextSentenceTranslation: pageContext?.contextSentenceTranslation || entry.contextSentenceTranslation,
                 contextParagraph: pageContext?.contextParagraph || entry.contextParagraph,
@@ -178,6 +179,10 @@ export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageW
     });
     
     await entriesStorage.setValue(updatedEntries);
+    
+    // Update local pageWords immediately to reflect category change without wait
+    setPageWords(prev => prev.map(w => selectedWordIds.has(w.id) ? { ...w, category: targetCategory } : w));
+    
     setSelectedWordIds(new Set());
   };
 
