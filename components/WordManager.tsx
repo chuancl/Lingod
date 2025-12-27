@@ -364,100 +364,110 @@ export const WordManager: React.FC<WordManagerProps> = ({
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-     const file = e.target.files?.[0];
-     if (!file) return;
+     const files = e.target.files;
+     if (!files || files.length === 0) return;
 
-     const reader = new FileReader();
-     reader.onload = async (event) => {
-        const text = event.target?.result as string;
-        let candidates: any[] = [];
-        
-        try {
-           candidates = JSON.parse(text);
-           if (!Array.isArray(candidates)) {
-               throw new Error("JSON Root is not an array");
-           }
-        } catch (err) {
-           showToast("文件格式错误：仅支持符合模板规范的 JSON 文件。", "error");
-           e.target.value = ''; 
-           return;
-        }
+     const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
+     const targetScenarioId = selectedScenarioId === 'all' ? '1' : selectedScenarioId;
+     
+     let successCount = 0;
+     let failCount = 0;
+     const newEntriesToAdd: WordEntry[] = [];
 
-        const targetCategory = activeTab === 'all' ? WordCategory.WantToLearnWord : activeTab;
-        const targetScenarioId = selectedScenarioId === 'all' ? '1' : selectedScenarioId;
-        
-        let successCount = 0;
-        let failCount = 0;
-        showToast(`开始处理 ${candidates.length} 个单词...`, 'info');
-        const newEntriesToAdd: WordEntry[] = [];
+     const isDuplicate = (t: string, trans?: string) => {
+        const existing = entries.some(e => 
+            e.text.toLowerCase() === t.toLowerCase() && 
+            (e.translation?.trim() === trans?.trim()) &&
+            e.scenarioId === targetScenarioId
+        );
+        const inBatch = newEntriesToAdd.some(e => 
+            e.text.toLowerCase() === t.toLowerCase() && 
+            (e.translation?.trim() === trans?.trim())
+            // scenarioId matches because we are pushing all to targetScenarioId
+        );
+        return existing || inBatch;
+     };
 
-        const isDuplicate = (t: string, trans?: string) => {
-            const existing = entries.some(e => 
-                e.text.toLowerCase() === t.toLowerCase() && 
-                (e.translation?.trim() === trans?.trim()) &&
-                e.scenarioId === targetScenarioId
-            );
-            const inBatch = newEntriesToAdd.some(e => 
-                e.text.toLowerCase() === t.toLowerCase() && 
-                (e.translation?.trim() === trans?.trim())
-                // scenarioId matches because we are pushing all to targetScenarioId
-            );
-            return existing || inBatch;
-        };
-
-        for (const candidate of candidates) {
-            if (!candidate.text || typeof candidate.text !== 'string' || candidate.text.includes('必填')) {
-                continue;
-            }
-
-            try {
-                if (isDuplicate(candidate.text, candidate.translation)) {
-                    failCount++;
-                    continue;
+     const processFile = (file: File): Promise<void> => {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const text = event.target?.result as string;
+                let candidates: any[] = [];
+                try {
+                   candidates = JSON.parse(text);
+                   if (!Array.isArray(candidates)) {
+                       console.warn(`File ${file.name} is not an array.`);
+                       candidates = [];
+                   }
+                } catch (err) {
+                   console.error(`Error parsing JSON from ${file.name}`, err);
+                   candidates = [];
                 }
 
-                newEntriesToAdd.push({
-                    id: `import-direct-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                    text: candidate.text,
-                    translation: candidate.translation || '',
-                    phoneticUs: candidate.phoneticUs,
-                    phoneticUk: candidate.phoneticUk,
-                    partOfSpeech: candidate.partOfSpeech,
-                    englishDefinition: candidate.englishDefinition,
-                    contextSentence: candidate.contextSentence,
-                    contextSentenceTranslation: candidate.contextSentenceTranslation,
-                    mixedSentence: candidate.mixedSentence,
-                    dictionaryExample: candidate.dictionaryExample,
-                    dictionaryExampleTranslation: candidate.dictionaryExampleTranslation,
-                    inflections: candidate.inflections || [],
-                    tags: candidate.tags || [],
-                    importance: typeof candidate.importance === 'number' ? candidate.importance : 0,
-                    cocaRank: typeof candidate.cocaRank === 'number' ? candidate.cocaRank : 0,
-                    phrases: candidate.phrases || [],
-                    roots: candidate.roots || [],
-                    synonyms: candidate.synonyms || [],
-                    image: candidate.image,
-                    video: candidate.video,
-                    category: targetCategory,
-                    addedAt: Date.now(),
-                    scenarioId: targetScenarioId,
-                    sourceUrl: candidate.sourceUrl
-                });
-                successCount++;
-            } catch (err) {
-                console.error(err);
-                failCount++;
-            }
-        }
+                for (const candidate of candidates) {
+                    if (!candidate.text || typeof candidate.text !== 'string' || candidate.text.includes('必填')) {
+                        continue;
+                    }
 
-        if (newEntriesToAdd.length > 0) {
-            setEntries(prev => [...prev, ...newEntriesToAdd]);
-            showToast(`导入完成: 新增 ${successCount} (至 ${targetCategory}), 重复/失败 ${failCount}`, 'success');
-        } else {
-             showToast(`导入结束: 没有新增单词 (全部重复或格式无效)`, 'warning');
-        }
+                    try {
+                        if (isDuplicate(candidate.text, candidate.translation)) {
+                            failCount++;
+                            continue;
+                        }
+
+                        newEntriesToAdd.push({
+                            id: `import-direct-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                            text: candidate.text,
+                            translation: candidate.translation || '',
+                            phoneticUs: candidate.phoneticUs,
+                            phoneticUk: candidate.phoneticUk,
+                            partOfSpeech: candidate.partOfSpeech,
+                            englishDefinition: candidate.englishDefinition,
+                            contextSentence: candidate.contextSentence,
+                            contextSentenceTranslation: candidate.contextSentenceTranslation,
+                            mixedSentence: candidate.mixedSentence,
+                            dictionaryExample: candidate.dictionaryExample,
+                            dictionaryExampleTranslation: candidate.dictionaryExampleTranslation,
+                            inflections: candidate.inflections || [],
+                            tags: candidate.tags || [],
+                            importance: typeof candidate.importance === 'number' ? candidate.importance : 0,
+                            cocaRank: typeof candidate.cocaRank === 'number' ? candidate.cocaRank : 0,
+                            phrases: candidate.phrases || [],
+                            roots: candidate.roots || [],
+                            synonyms: candidate.synonyms || [],
+                            image: candidate.image,
+                            video: candidate.video,
+                            category: targetCategory,
+                            addedAt: Date.now(),
+                            scenarioId: targetScenarioId,
+                            sourceUrl: candidate.sourceUrl
+                        });
+                        successCount++;
+                    } catch (err) {
+                        console.error(err);
+                        failCount++;
+                    }
+                }
+                resolve();
+            };
+            reader.readAsText(file);
+        });
      };
-     reader.readAsText(file);
+
+     showToast(`正在解析 ${files.length} 个文件...`, 'info');
+
+     for (let i = 0; i < files.length; i++) {
+         await processFile(files[i]);
+     }
+
+     if (newEntriesToAdd.length > 0) {
+        setEntries(prev => [...prev, ...newEntriesToAdd]);
+        showToast(`导入完成: 新增 ${successCount} (至 ${targetCategory}), 重复/失败 ${failCount}`, 'success');
+     } else {
+         showToast(`导入结束: 没有新增单词 (全部重复或格式无效)`, 'warning');
+     }
+     
      e.target.value = ''; 
   };
 
@@ -540,7 +550,7 @@ export const WordManager: React.FC<WordManagerProps> = ({
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col relative min-h-[600px]">
-      <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImportFile} />
+      <input type="file" ref={fileInputRef} className="hidden" accept=".json" multiple onChange={handleImportFile} />
 
       <Toast toast={toast} onClose={() => setToast(null)} />
 
