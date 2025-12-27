@@ -60,31 +60,32 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
   // Listen for context updates from the main script (scan results)
   useEffect(() => {
       const handler = (e: CustomEvent) => {
-          const foundContexts = e.detail || {};
+          const foundContexts: Record<string, Partial<WordEntry>> = e.detail || {};
           
           setPageWords(prev => {
-              // Merge foundContexts into existing entries if present, or add if new
-              // Note: 'entries' prop contains all user words. 'pageWords' are only those found on page.
-              // This logic runs inside ContentOverlay, which receives 'pageWords' updates via this event
-              // from the main script execution context (via window event) or directly if we move scan here.
-              // Actually, since scan logic is in main(), we need a way to pass data to React.
-              // The easiest way is using `setPageWords` inside main() if we can access it, 
-              // BUT createShadowRootUi renders independently.
-              // So we use a CustomEvent as a bridge.
+              // 修复：使用 Map 进行增量合并，防止新扫描的段落覆盖旧数据
+              const mergedMap = new Map<string, WordEntry>();
               
-              const newPageWords: WordEntry[] = [];
+              // 1. 先保留已有的单词
+              prev.forEach(w => mergedMap.set(w.id, w));
+              
+              // 2. 合并新发现的单词
               const allEntries = entriesRef.current;
-              
-              Object.keys(foundContexts).forEach(id => {
-                  const entry = allEntries.find(e => e.id === id);
-                  if (entry) {
-                      newPageWords.push({
-                          ...entry,
-                          ...foundContexts[id] // Merge context
-                      });
+              Object.entries(foundContexts).forEach(([id, newContext]) => {
+                  const existing = mergedMap.get(id);
+                  if (existing) {
+                      // 如果单词已存在，更新上下文信息（保留最新的）
+                      mergedMap.set(id, { ...existing, ...newContext });
+                  } else {
+                      // 如果是新发现的单词，从总词库中查找基础信息并添加
+                      const originalEntry = allEntries.find(e => e.id === id);
+                      if (originalEntry) {
+                          mergedMap.set(id, { ...originalEntry, ...newContext });
+                      }
                   }
               });
-              return newPageWords;
+
+              return Array.from(mergedMap.values());
           });
       };
       window.addEventListener('context-lingo-update-contexts', handler as EventListener);
