@@ -27,6 +27,12 @@ interface ActiveBubble {
     originalText: string;
     rect: DOMRect;
     triggerElement?: HTMLElement;
+    
+    // Captured Context
+    contextSentence?: string;
+    contextSentenceTrans?: string;
+    contextParagraph?: string;
+    contextParagraphTrans?: string;
 }
 
 const ContentOverlay: React.FC<ContentOverlayProps> = ({ 
@@ -95,7 +101,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       return true;
   };
 
-  const addBubble = (entry: WordEntry, originalText: string, rect: DOMRect, triggerElement: HTMLElement) => {
+  const addBubble = (entry: WordEntry, originalText: string, rect: DOMRect, triggerElement: HTMLElement, context?: { s?: string, st?: string, p?: string, pt?: string }) => {
       const config = interactionConfigRef.current;
       if (hideTimers.current.has(entry.id)) {
           clearTimeout(hideTimers.current.get(entry.id)!);
@@ -104,11 +110,23 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
 
       setActiveBubbles(prev => {
           const exists = prev.find(b => b.id === entry.id);
+          const newBubble: ActiveBubble = { 
+              id: entry.id, 
+              entry, 
+              originalText, 
+              rect, 
+              triggerElement,
+              contextSentence: context?.s,
+              contextSentenceTrans: context?.st,
+              contextParagraph: context?.p,
+              contextParagraphTrans: context?.pt
+          };
+
           if (!config.allowMultipleBubbles) {
-              return [{ id: entry.id, entry, originalText, rect, triggerElement }];
+              return [newBubble];
           } else {
               if (exists) return prev;
-              return [...prev, { id: entry.id, entry, originalText, rect, triggerElement }];
+              return [...prev, newBubble];
           }
       });
   };
@@ -123,6 +141,22 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       hideTimers.current.set(id, timer);
   };
 
+  const extractContext = (entryEl: HTMLElement) => {
+      const s = entryEl.getAttribute('data-ctx-s') || '';
+      const st = entryEl.getAttribute('data-ctx-st') || '';
+      
+      let p = '';
+      let pt = '';
+      // Find parent paragraph block that was translated
+      const parentBlock = entryEl.closest('[data-lingo-source]');
+      if (parentBlock) {
+          p = parentBlock.getAttribute('data-lingo-source') || '';
+          pt = parentBlock.getAttribute('data-lingo-translation') || '';
+      }
+      
+      return { s, st, p, pt };
+  };
+
   useEffect(() => {
      const handleMouseOver = (e: MouseEvent) => {
          const target = e.target as HTMLElement;
@@ -131,6 +165,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
              const id = entryEl.getAttribute('data-entry-id');
              const originalText = entryEl.getAttribute('data-original-text') || '';
              const entry = entriesRef.current.find(w => w.id === id);
+             
              if (entry && id) {
                  if (hideTimers.current.has(id)) {
                      clearTimeout(hideTimers.current.get(id)!);
@@ -139,8 +174,11 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
                  if (interactionConfigRef.current.mainTrigger.action === 'Hover') {
                      if (checkModifier(e, interactionConfigRef.current.mainTrigger.modifier)) {
                          if (showTimer.current) clearTimeout(showTimer.current);
+                         
+                         const context = extractContext(entryEl);
+
                          showTimer.current = setTimeout(() => {
-                            addBubble(entry, originalText, entryEl.getBoundingClientRect(), entryEl);
+                            addBubble(entry, originalText, entryEl.getBoundingClientRect(), entryEl, context);
                          }, interactionConfigRef.current.mainTrigger.delay);
                      }
                  }
@@ -171,7 +209,8 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
             if (entry) {
                 if (config.mainTrigger.action === actionType && checkModifier(e, config.mainTrigger.modifier)) {
                     if (actionType === 'RightClick') e.preventDefault();
-                    addBubble(entry, originalText, entryEl.getBoundingClientRect(), entryEl);
+                    const context = extractContext(entryEl);
+                    addBubble(entry, originalText, entryEl.getBoundingClientRect(), entryEl, context);
                 } else if (config.quickAddTrigger.action === actionType && checkModifier(e, config.quickAddTrigger.modifier)) {
                     if (actionType === 'RightClick') e.preventDefault();
                     handleCaptureAndAdd(entry.id);
@@ -209,9 +248,9 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       setEntries(newEntries);
   };
 
-  const handleUpdateWordCategory = async (id: string, category: WordCategory) => {
+  const handleUpdateWordCategory = async (id: string, updates: Partial<WordEntry>) => {
       const allEntries = await entriesStorage.getValue();
-      const newEntries = allEntries.map(e => e.id === id ? { ...e, category } : e);
+      const newEntries = allEntries.map(e => e.id === id ? { ...e, ...updates } : e);
       await entriesStorage.setValue(newEntries);
       setEntries(newEntries);
   };
@@ -220,7 +259,6 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
     <div className="reset-shadow-dom" style={{ all: 'initial', fontFamily: 'sans-serif' }}>
        <PageWidget config={widgetConfig} setConfig={(v) => pageWidgetConfigStorage.setValue(v)} pageWords={pageWords} setPageWords={setPageWords} onBatchAddToLearning={(ids) => ids.forEach(id => handleCaptureAndAdd(id))} />
        {activeBubbles.map(bubble => {
-           // Ensure we render with the most up-to-date entry data (e.g. if category changes)
            const currentEntry = entries.find(e => e.id === bubble.id) || bubble.entry;
            return (
                <WordBubble 
@@ -230,6 +268,12 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
                     targetRect={bubble.rect} 
                     config={interactionConfig} 
                     isVisible={true} 
+                    context={{
+                        sentence: bubble.contextSentence,
+                        sentenceTrans: bubble.contextSentenceTrans,
+                        paragraph: bubble.contextParagraph,
+                        paragraphTrans: bubble.contextParagraphTrans
+                    }}
                     onMouseEnter={() => handleBubbleMouseEnter(bubble.id)} 
                     onMouseLeave={() => scheduleRemoveBubble(bubble.id)} 
                     onUpdateCategory={handleUpdateWordCategory}
@@ -282,7 +326,14 @@ export default defineContentScript({
         });
 
         // 1. Gather all potential replacements across sentences
-        let allPotentialReplacements: { start: number, end: number, entry: WordEntry, matchedWord: string }[] = [];
+        let allPotentialReplacements: { 
+            start: number, 
+            end: number, 
+            entry: WordEntry, 
+            matchedWord: string,
+            sourceSentence: string,
+            transSentence: string
+        }[] = [];
         let searchCursor = 0;
         
         for (let idx = 0; idx < sourceSentences.length; idx++) {
@@ -298,7 +349,14 @@ export default defineContentScript({
             matches.forEach(m => {
                 let localPos = sent.indexOf(m.text);
                 while (localPos !== -1) {
-                    allPotentialReplacements.push({ start: sentStart + localPos, end: sentStart + localPos + m.text.length, entry: m.entry, matchedWord: m.matchedWord });
+                    allPotentialReplacements.push({ 
+                        start: sentStart + localPos, 
+                        end: sentStart + localPos + m.text.length, 
+                        entry: m.entry, 
+                        matchedWord: m.matchedWord,
+                        sourceSentence: sent,
+                        transSentence: trans
+                    });
                     localPos = sent.indexOf(m.text, localPos + 1);
                 }
             });
@@ -314,7 +372,14 @@ export default defineContentScript({
                         aggMatches.forEach(m => {
                             let localPos = sent.indexOf(m.text);
                             while (localPos !== -1) {
-                                allPotentialReplacements.push({ start: sentStart + localPos, end: sentStart + localPos + m.text.length, entry: m.entry, matchedWord: m.matchedWord });
+                                allPotentialReplacements.push({ 
+                                    start: sentStart + localPos, 
+                                    end: sentStart + localPos + m.text.length, 
+                                    entry: m.entry, 
+                                    matchedWord: m.matchedWord,
+                                    sourceSentence: sent,
+                                    transSentence: trans
+                                });
                                 localPos = sent.indexOf(m.text, localPos + 1);
                             }
                         });
@@ -408,13 +473,16 @@ export default defineContentScript({
                         const span = document.createElement('span');
                         span.className = 'context-lingo-word';
                         // Pass specific category styles to builder
+                        // Now passing sentence context info!
                         span.innerHTML = buildReplacementHtml(
                             mid, 
                             r.matchedWord, 
                             r.entry.category, 
                             currentStyles, 
                             currentOriginalTextConfig, 
-                            r.entry.id
+                            r.entry.id,
+                            r.sourceSentence,
+                            r.transSentence
                         );
 
                         // Insert After first (order matters when inserting multiple siblings)
@@ -469,8 +537,11 @@ export default defineContentScript({
                     const response = await browser.runtime.sendMessage({ action: 'TRANSLATE_TEXT', engine, text: sentences.join(' ||| '), target: 'en' });
                     if (response.success) {
                         const transSentences = response.data.Response.TargetText.split(/\s*\|\|\|\s*/);
+                        
+                        // Store Full Paragraph Context
                         item.block.setAttribute('data-lingo-source', item.text);
                         item.block.setAttribute('data-lingo-translation', transSentences.join(' '));
+                        
                         if (currentAutoTranslate.bilingualMode) {
                             const div = document.createElement('div');
                             div.className = 'context-lingo-bilingual-block';

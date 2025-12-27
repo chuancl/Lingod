@@ -13,13 +13,14 @@ export const buildReplacementHtml = (
     category: WordCategory,
     styles: Record<WordCategory, StyleConfig>,
     originalTextConfig: OriginalTextConfig,
-    entryId: string
+    entryId: string,
+    contextSentence: string = "",
+    contextSentenceTrans: string = ""
 ): string => {
     // Use fallback if style for category is missing
     const transStyle = styles[category] || DEFAULT_STYLE;
     
     // Robust Fallback: Ensure originalText object exists and has defaults
-    // This fixes the issue where old storage data (pre-update) causes undefined styles
     const rawOrig = transStyle.originalText;
     const origTextStyle = rawOrig 
         ? { ...DEFAULT_STYLE.originalText, ...rawOrig }
@@ -61,11 +62,17 @@ export const buildReplacementHtml = (
         }
     }
 
+    // Escape data attributes to prevent HTML breakage
+    const safeSent = contextSentence.replace(/"/g, '&quot;');
+    const safeSentTrans = contextSentenceTrans.replace(/"/g, '&quot;');
+
     // 1. Translation Element
     const transInner = `<span style="${transBaseStyle} border-bottom: 2px solid transparent; ${transOverride}" 
        class="context-lingo-target"
        data-entry-id="${entryId}"
        data-original-text="${targetChinese}"
+       data-ctx-s="${safeSent}"
+       data-ctx-st="${safeSentTrans}"
        onmouseover="this.style.borderColor='rgba(59, 130, 246, 0.5)'" 
        onmouseout="this.style.borderColor='transparent'"
        >${transPrefix}${englishReplacement}${transSuffix}</span>`;

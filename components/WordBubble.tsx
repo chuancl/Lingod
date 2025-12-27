@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, ExternalLink, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -13,8 +12,14 @@ interface WordBubbleProps {
   isVisible: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
-  onUpdateCategory: (id: string, category: WordCategory) => void;
+  onUpdateCategory: (id: string, updates: Partial<WordEntry>) => void;
   ttsSpeed?: number;
+  context?: {
+      sentence?: string;
+      sentenceTrans?: string;
+      paragraph?: string;
+      paragraphTrans?: string;
+  };
 }
 
 const CATEGORY_ORDER = [
@@ -38,7 +43,8 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
     onMouseEnter, 
     onMouseLeave, 
     onUpdateCategory,
-    ttsSpeed = 1.0
+    ttsSpeed = 1.0,
+    context
 }) => {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [placedSide, setPlacedSide] = useState<'top' | 'bottom' | 'left' | 'right'>('top');
@@ -104,7 +110,17 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
 
       const nextCategory = CATEGORY_ORDER[nextIndex];
       setHasMoved(true); // Disable arrows visually
-      onUpdateCategory(entry.id, nextCategory);
+      
+      // Update Category AND Save Context
+      const updates: Partial<WordEntry> = { category: nextCategory };
+      
+      // Only update context if captured values exist
+      if (context?.sentence) updates.contextSentence = context.sentence;
+      if (context?.sentenceTrans) updates.contextSentenceTranslation = context.sentenceTrans;
+      if (context?.paragraph) updates.contextParagraph = context.paragraph;
+      if (context?.paragraphTrans) updates.contextParagraphTranslation = context.paragraphTrans;
+      
+      onUpdateCategory(entry.id, updates);
   };
 
   const playAudio = (e: React.MouseEvent) => {
@@ -187,7 +203,7 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
 
   const containerStyle: React.CSSProperties = { position: 'fixed', zIndex: 2147483647, backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', border: '1px solid #e2e8f0', padding: '20px', width: '280px', boxSizing: 'border-box', top: position?.top ?? -9999, left: position?.left ?? -9999, opacity: position ? 1 : 0, transition: 'opacity 0.15s ease-out', pointerEvents: 'auto', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', fontSize: '16px', lineHeight: '1.5', color: '#0f172a', textAlign: 'left' };
   
-  // Use expanded style properties to avoid React warnings about mixing shorthand 'border' with 'borderTopColor' etc.
+  // Explicitly define border properties to avoid React warnings about mixing shorthands
   const arrowSize = 12;
   const arrowStyle: React.CSSProperties = { 
       position: 'absolute', 
@@ -196,19 +212,49 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       backgroundColor: '#ffffff', 
       transform: 'rotate(45deg)', 
       zIndex: -1,
-      borderWidth: '1px',
       borderStyle: 'solid',
-      borderColor: '#e2e8f0'
+      borderWidth: '1px',
+      borderColor: '#e2e8f0', // Default color for all sides
   };
 
   if (placedSide === 'top') {
-      Object.assign(arrowStyle, { bottom: '-6px', left: 'calc(50% - 6px)', borderTopColor: 'transparent', borderLeftColor: 'transparent' });
+      Object.assign(arrowStyle, { 
+          bottom: '-6px', 
+          left: 'calc(50% - 6px)', 
+          // A square rotated 45deg: top-left sides are top/left borders. bottom-right sides are bottom/right borders.
+          // If placed 'top' (above target), arrow points down. Down tip is bottom-right corner.
+          // So we need borderBottom and borderRight visible.
+          // Hide Top and Left.
+          borderTopColor: 'transparent',
+          borderLeftColor: 'transparent'
+      });
   } else if (placedSide === 'bottom') {
-      Object.assign(arrowStyle, { top: '-6px', left: 'calc(50% - 6px)', borderBottomColor: 'transparent', borderRightColor: 'transparent' });
+      Object.assign(arrowStyle, { 
+          top: '-6px', 
+          left: 'calc(50% - 6px)',
+          // Placed below, points up. Up tip is top-left corner.
+          // Hide Bottom and Right.
+          borderBottomColor: 'transparent', 
+          borderRightColor: 'transparent'
+      });
   } else if (placedSide === 'left') {
-      Object.assign(arrowStyle, { right: '-6px', top: 'calc(50% - 6px)', borderBottomColor: 'transparent', borderLeftColor: 'transparent' });
+      Object.assign(arrowStyle, { 
+          right: '-6px', 
+          top: 'calc(50% - 6px)', 
+          // Placed left, points right. Right tip is top-right corner.
+          // Hide Bottom and Left.
+          borderBottomColor: 'transparent', 
+          borderLeftColor: 'transparent'
+      });
   } else if (placedSide === 'right') {
-      Object.assign(arrowStyle, { left: '-6px', top: 'calc(50% - 6px)', borderTopColor: 'transparent', borderRightColor: 'transparent' });
+      Object.assign(arrowStyle, { 
+          left: '-6px', 
+          top: 'calc(50% - 6px)', 
+          // Placed right, points left. Left tip is bottom-left corner.
+          // Hide Top and Right.
+          borderTopColor: 'transparent', 
+          borderRightColor: 'transparent'
+      });
   }
 
   const headerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', lineHeight: 1 };
