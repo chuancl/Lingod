@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { WordEntry, WordCategory, MergeStrategyConfig } from '../../types';
 import { PlayCircle, MapPin, ExternalLink, Filter, BarChart2, Star, Youtube, Image as ImageIcon } from 'lucide-react';
@@ -32,6 +33,35 @@ export const WordList: React.FC<WordListProps> = ({
     // Image Preview State
     const [previewImage, setPreviewImage] = useState<{ url: string; rect: DOMRect } | null>(null);
 
+    // Infinite Scroll State
+    const [visibleCount, setVisibleCount] = useState(20);
+    const observerRef = useRef<IntersectionObserver | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
+
+    // Reset visible count when data source changes (filtering/sorting/tab switch)
+    useEffect(() => {
+        setVisibleCount(20);
+    }, [groupedEntries]);
+
+    // Setup Intersection Observer for Infinite Scroll
+    useEffect(() => {
+        if (observerRef.current) observerRef.current.disconnect();
+
+        observerRef.current = new IntersectionObserver((entries) => {
+            if (entries[0].isIntersecting) {
+                setVisibleCount((prev) => Math.min(prev + 20, groupedEntries.length));
+            }
+        }, { threshold: 0.1, rootMargin: '100px' });
+
+        if (loadMoreRef.current) {
+            observerRef.current.observe(loadMoreRef.current);
+        }
+
+        return () => observerRef.current?.disconnect();
+    }, [groupedEntries.length, visibleCount]); // Re-attach if length or count changes to keep ref fresh
+
+    const visibleEntries = useMemo(() => groupedEntries.slice(0, visibleCount), [groupedEntries, visibleCount]);
+
     // 统一的新标签页打开逻辑
     const handleWordClick = (word: string) => {
         // 使用 (browser.runtime as any).getURL 修复 Property 'getURL' does not exist 错误
@@ -50,7 +80,7 @@ export const WordList: React.FC<WordListProps> = ({
 
     return (
         <div className="space-y-4">
-          {groupedEntries.map(group => {
+          {visibleEntries.map(group => {
             const primary = group[0];
             const uniqueTranslations = Array.from(new Set(group.map(e => e.translation?.trim()).filter(Boolean)));
             const displayTranslation = uniqueTranslations.join('; ');
@@ -278,6 +308,14 @@ export const WordList: React.FC<WordListProps> = ({
               </div>
             );
           })}
+
+          {/* Sentinel for Infinite Scroll - Only show if there's more to load */}
+          {visibleCount < groupedEntries.length && (
+              <div ref={loadMoreRef} className="h-10 flex justify-center items-center py-4">
+                  <div className="w-5 h-5 border-2 border-slate-200 border-t-slate-400 rounded-full animate-spin"></div>
+                  <span className="ml-2 text-xs text-slate-400">加载更多...</span>
+              </div>
+          )}
 
           {/* Portal for Image Preview */}
           {previewImage && createPortal(

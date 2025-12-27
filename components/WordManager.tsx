@@ -105,6 +105,7 @@ export const WordManager: React.FC<WordManagerProps> = ({
   const [activeTab, setActiveTab] = useState<WordTab>('all');
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(''); // New state for performance
   const [selectedWords, setSelectedWords] = useState<Set<string>>(new Set());
 
   const [isImportDropdownOpen, setIsImportDropdownOpen] = useState(false);
@@ -112,8 +113,19 @@ export const WordManager: React.FC<WordManagerProps> = ({
 
   useEffect(() => {
       if (initialTab) setActiveTab(initialTab);
-      if (initialSearchQuery !== undefined) setSearchQuery(initialSearchQuery);
+      if (initialSearchQuery !== undefined) {
+          setSearchQuery(initialSearchQuery);
+          setDebouncedSearchQuery(initialSearchQuery); // Immediate update for initial load
+      }
   }, [initialTab, initialSearchQuery]);
+
+  // Debounce Search Logic
+  useEffect(() => {
+      const handler = setTimeout(() => {
+          setDebouncedSearchQuery(searchQuery);
+      }, 300);
+      return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -211,15 +223,16 @@ export const WordManager: React.FC<WordManagerProps> = ({
       if (selectedScenarioId !== 'all') {
          if (e.scenarioId !== selectedScenarioId) return false;
       }
-      if (searchQuery) {
-        const lowerQ = searchQuery.toLowerCase();
+      // Use Debounced Query for filtering
+      if (debouncedSearchQuery) {
+        const lowerQ = debouncedSearchQuery.toLowerCase();
         const matchText = e.text.toLowerCase().includes(lowerQ);
         const matchTrans = e.translation?.toLowerCase().includes(lowerQ) || false;
         if (!matchText && !matchTrans) return false;
       }
       return true; 
     });
-  }, [entries, activeTab, selectedScenarioId, searchQuery]);
+  }, [entries, activeTab, selectedScenarioId, debouncedSearchQuery]);
 
   const groupedEntries = useMemo(() => {
     const groups: Record<string, WordEntry[]> = {};
@@ -751,7 +764,7 @@ export const WordManager: React.FC<WordManagerProps> = ({
            showConfig={showConfig}
            mergeConfig={mergeConfig}
            isAllWordsTab={isAllWordsTab}
-           searchQuery={searchQuery}
+           searchQuery={debouncedSearchQuery}
            ttsSpeed={ttsSpeed}
            onOpenDetail={onOpenDetail} 
         />
