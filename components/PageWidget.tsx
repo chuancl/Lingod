@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { PageWidgetConfig, WordEntry, WordCategory, WordTab } from '../types';
 import { entriesStorage } from '../utils/storage';
@@ -8,7 +9,7 @@ import { browser } from 'wxt/browser';
 interface PageWidgetProps {
   config: PageWidgetConfig;
   setConfig: (config: PageWidgetConfig) => void;
-  pageWords: WordEntry[];
+  pageWords: WordEntry[]; // Now contains enriched context
   setPageWords: React.Dispatch<React.SetStateAction<WordEntry[]>>;
   onBatchAddToLearning?: (ids: string[]) => void;
 }
@@ -126,22 +127,57 @@ export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageW
     setSelectedWordIds(newSet);
   };
 
-  const handleBatchSetToLearning = async () => {
+  // Helper to get fresh timestamped URL
+  const getCurrentVideoUrl = () => {
+      let url = window.location.href;
+      try {
+          const video = document.querySelector('video');
+          if (video && !video.paused) {
+              const time = Math.floor(video.currentTime);
+              const u = new URL(url);
+              // Standard params for common sites
+              if (u.hostname.includes('youtube.com')) {
+                  u.searchParams.set('t', `${time}s`);
+                  url = u.toString();
+              } else if (u.hostname.includes('bilibili.com')) {
+                  u.searchParams.set('t', `${time}`);
+                  url = u.toString();
+              }
+          }
+      } catch (e) {
+          console.warn("Failed to get video timestamp", e);
+      }
+      return url;
+  };
+
+  const handleBatchMove = async (targetCategory: WordCategory) => {
     if (selectedWordIds.size === 0) return;
     
-    if (onBatchAddToLearning) {
-        onBatchAddToLearning(Array.from(selectedWordIds));
-    } else {
-        const allEntries = await entriesStorage.getValue();
-        const updatedEntries = allEntries.map(entry => {
-           if (selectedWordIds.has(entry.id)) {
-              return { ...entry, category: WordCategory.LearningWord };
-           }
-           return entry;
-        });
-        await entriesStorage.setValue(updatedEntries);
-    }
+    const allEntries = await entriesStorage.getValue();
+    const updatedEntries = allEntries.map(entry => {
+        if (selectedWordIds.has(entry.id)) {
+            // Find the enriched context from pageWords
+            const pageContext = pageWords.find(pw => pw.id === entry.id);
+            
+            // Get fresh timestamped URL at the moment of action
+            const freshSourceUrl = getCurrentVideoUrl();
+
+            return { 
+                ...entry, 
+                category: targetCategory,
+                // Merge context if available
+                contextSentence: pageContext?.contextSentence || entry.contextSentence,
+                contextSentenceTranslation: pageContext?.contextSentenceTranslation || entry.contextSentenceTranslation,
+                contextParagraph: pageContext?.contextParagraph || entry.contextParagraph,
+                contextParagraphTranslation: pageContext?.contextParagraphTranslation || entry.contextParagraphTranslation,
+                // Use fresh URL if available, otherwise fall back to scanned URL or existing
+                sourceUrl: freshSourceUrl || pageContext?.sourceUrl || entry.sourceUrl
+            };
+        }
+        return entry;
+    });
     
+    await entriesStorage.setValue(updatedEntries);
     setSelectedWordIds(new Set());
   };
 
@@ -304,7 +340,7 @@ export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageW
             selectedWordIds={selectedWordIds}
             toggleSelectAll={toggleSelectAll}
             toggleSelectWord={toggleSelectWord}
-            handleBatchSetToLearning={handleBatchSetToLearning}
+            handleBatchMove={handleBatchMove}
             handleBatchDismiss={handleBatchDismiss}
             onClose={() => setIsOpen(false)}
             onMouseDownHeader={startDragModal}
@@ -316,7 +352,7 @@ export const PageWidget: React.FC<PageWidgetProps> = ({ config, setConfig, pageW
             handleConfigDragOver={handleConfigDragOver}
             handleConfigDragEnd={handleConfigDragEnd}
             draggedConfigIndex={draggedConfigIndex}
-            onOpenDetail={handleOpenDetail} // 绑定跳转逻辑
+            onOpenDetail={handleOpenDetail} 
          />
       )}
     </div>

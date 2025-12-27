@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { PageWidgetConfig, WordTab, WordCategory, WordEntry } from '../../types';
-import { X, Settings2, CheckSquare, Square, GripVertical, Download, ExternalLink, PlayCircle, Filter, Star, BarChart2 } from 'lucide-react';
+import { X, Settings2, CheckSquare, Square, GripVertical, Download, ExternalLink, PlayCircle, Filter, Star, BarChart2, RotateCcw, BookOpen, CheckCircle, GraduationCap, ArrowRight, Trash2 } from 'lucide-react';
 import { playWordAudio } from '../../utils/audio';
 
 interface WidgetWindowProps {
@@ -12,7 +13,7 @@ interface WidgetWindowProps {
     selectedWordIds: Set<string>;
     toggleSelectAll: () => void;
     toggleSelectWord: (id: string) => void;
-    handleBatchSetToLearning: () => void;
+    handleBatchMove: (category: WordCategory) => void;
     handleBatchDismiss: () => void;
     onClose: () => void;
     onMouseDownHeader: (e: React.MouseEvent) => void;
@@ -29,7 +30,7 @@ interface WidgetWindowProps {
 
 export const WidgetWindow: React.FC<WidgetWindowProps> = ({
     config, filteredWords, availableTabs, activeTab, setActiveTab,
-    selectedWordIds, toggleSelectAll, toggleSelectWord, handleBatchSetToLearning, handleBatchDismiss,
+    selectedWordIds, toggleSelectAll, toggleSelectWord, handleBatchMove, handleBatchDismiss,
     onClose, onMouseDownHeader, onMouseDownResize,
     isConfigOpen, setIsConfigOpen, updateSetting,
     handleConfigDragStart, handleConfigDragOver, handleConfigDragEnd, draggedConfigIndex,
@@ -47,7 +48,10 @@ export const WidgetWindow: React.FC<WidgetWindowProps> = ({
     const isAllSelected = filteredWords.length > 0 && filteredWords.every(w => selectedWordIds.has(w.id));
 
     const handleExport = () => {
-        const blob = new Blob([JSON.stringify(filteredWords, null, 2)], { type: 'application/json' });
+        const dataToExport = filteredWords.filter(w => selectedWordIds.has(w.id));
+        if (dataToExport.length === 0) return;
+        
+        const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -56,6 +60,52 @@ export const WidgetWindow: React.FC<WidgetWindowProps> = ({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    };
+
+    // Render Action Buttons based on Active Tab
+    const renderActions = () => {
+        if (selectedWordIds.size === 0) return null;
+
+        const ActionButton = ({ onClick, icon: Icon, label, colorClass }: any) => (
+            <button 
+                onClick={onClick} 
+                className={`flex items-center px-3 py-1.5 rounded-lg border text-xs font-medium transition animate-in slide-in-from-right-2 fade-in ${colorClass}`}
+            >
+                <Icon className="w-3.5 h-3.5 mr-1.5" /> {label}
+            </button>
+        );
+
+        if (activeTab === WordCategory.KnownWord) {
+            return (
+                <>
+                    <ActionButton onClick={() => handleBatchMove(WordCategory.WantToLearnWord)} icon={RotateCcw} label="移至想学" colorClass="bg-amber-50 text-amber-700 border-amber-100 hover:bg-amber-100" />
+                    <ActionButton onClick={() => handleBatchMove(WordCategory.LearningWord)} icon={BookOpen} label="移至正在学" colorClass="bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100" />
+                </>
+            );
+        }
+        
+        if (activeTab === WordCategory.WantToLearnWord) {
+            return (
+                <>
+                    <ActionButton onClick={() => handleBatchMove(WordCategory.LearningWord)} icon={ArrowRight} label="开始学习" colorClass="bg-blue-50 text-blue-700 border-blue-100 hover:bg-blue-100" />
+                    <ActionButton onClick={() => handleBatchMove(WordCategory.KnownWord)} icon={CheckCircle} label="设为已掌握" colorClass="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100" />
+                </>
+            );
+        }
+
+        if (activeTab === WordCategory.LearningWord) {
+            return (
+                <>
+                    <ActionButton onClick={() => handleBatchMove(WordCategory.WantToLearnWord)} icon={RotateCcw} label="移回想学" colorClass="bg-white text-slate-600 border-slate-200 hover:bg-slate-50" />
+                    <ActionButton onClick={() => handleBatchMove(WordCategory.KnownWord)} icon={GraduationCap} label="设为已掌握" colorClass="bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100" />
+                </>
+            );
+        }
+
+        // Fallback / All Tab
+        return (
+            <ActionButton onClick={() => handleBatchMove(WordCategory.LearningWord)} icon={BookOpen} label="添加到正在学" colorClass="bg-blue-50 text-blue-600 border-blue-100 hover:bg-blue-100" />
+        );
     };
 
     return (
@@ -170,17 +220,13 @@ export const WidgetWindow: React.FC<WidgetWindowProps> = ({
                      <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all ${activeTab === tab ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{getTabLabel(tab)}</button>
                   ))}
                </div>
-               <div className="flex items-center justify-between pt-1">
+               <div className="flex items-center justify-between pt-1 min-h-[32px]">
                    <button onClick={toggleSelectAll} className="flex items-center text-xs font-bold text-slate-600 hover:text-slate-900 select-none">
                       {isAllSelected ? <CheckSquare className="w-4 h-4 mr-1.5 text-blue-600"/> : <Square className="w-4 h-4 mr-1.5 text-slate-400"/>}
                       全选 ({filteredWords.length})
                    </button>
                    <div className="flex items-center gap-2">
-                        {selectedWordIds.size > 0 && (
-                            <button onClick={handleBatchSetToLearning} className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 border border-blue-100 text-xs font-medium transition animate-in slide-in-from-right-2 fade-in">
-                                <svg className="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5Z"/><path d="M8 7h6"/><path d="M8 11h8"/></svg> 添加到正在学
-                            </button>
-                        )}
+                        {renderActions()}
                         <button onClick={handleExport} className="flex items-center px-3 py-1.5 bg-white text-slate-500 rounded-lg hover:bg-slate-50 border border-slate-200 text-xs transition" title="导出当前列表">
                             <Download className="w-3.5 h-3.5 mr-1.5" /> 导出
                         </button>
@@ -284,9 +330,11 @@ export const WidgetWindow: React.FC<WidgetWindowProps> = ({
                                                 {config.showContextTranslation && word.contextSentenceTranslation && (
                                                     <p className="text-xs text-slate-500 pl-3 mt-1">{word.contextSentenceTranslation}</p>
                                                 )}
-                                                <div className="mt-1 pl-3 text-[10px] text-blue-500 flex items-center opacity-0 group-hover/line:opacity-100 transition-opacity">
-                                                     <ExternalLink className="w-3 h-3 mr-1" /> 点击跳转到来源
-                                                </div>
+                                                {word.sourceUrl && (
+                                                    <a href={word.sourceUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="mt-1 pl-3 text-[10px] text-blue-500 flex items-center opacity-0 group-hover/line:opacity-100 transition-opacity">
+                                                         <ExternalLink className="w-3 h-3 mr-1" /> 点击跳转到来源
+                                                    </a>
+                                                )}
                                             </div>
                                         )
                                         if(item.id === 'mixed' && word.mixedSentence) return (
