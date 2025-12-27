@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState, useRef } from 'react';
 import { WordEntry, WordInteractionConfig, WordCategory } from '../types';
 import { Volume2, ExternalLink, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -19,6 +20,7 @@ interface WordBubbleProps {
       sentenceTrans?: string;
       paragraph?: string;
       paragraphTrans?: string;
+      sourceUrl?: string;
   };
 }
 
@@ -119,6 +121,7 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       if (context?.sentenceTrans) updates.contextSentenceTranslation = context.sentenceTrans;
       if (context?.paragraph) updates.contextParagraph = context.paragraph;
       if (context?.paragraphTrans) updates.contextParagraphTranslation = context.paragraphTrans;
+      if (context?.sourceUrl) updates.sourceUrl = context.sourceUrl;
       
       onUpdateCategory(entry.id, updates);
   };
@@ -195,11 +198,8 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
   const prevIndex = (currentIndex - 1 + CATEGORY_ORDER.length) % CATEGORY_ORDER.length;
   const nextIndex = (currentIndex + 1) % CATEGORY_ORDER.length;
   
-  const prevCategory = CATEGORY_ORDER[prevIndex];
-  const nextCategory = CATEGORY_ORDER[nextIndex];
-  
-  const prevLabel = CATEGORY_LABELS[prevCategory];
-  const nextLabel = CATEGORY_LABELS[nextCategory];
+  const prevLabel = CATEGORY_LABELS[CATEGORY_ORDER[prevIndex]];
+  const nextLabel = CATEGORY_LABELS[CATEGORY_ORDER[nextIndex]];
 
   const containerStyle: React.CSSProperties = { position: 'fixed', zIndex: 2147483647, backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', border: '1px solid #e2e8f0', padding: '20px', width: '280px', boxSizing: 'border-box', top: position?.top ?? -9999, left: position?.left ?? -9999, opacity: position ? 1 : 0, transition: 'opacity 0.15s ease-out', pointerEvents: 'auto', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', fontSize: '16px', lineHeight: '1.5', color: '#0f172a', textAlign: 'left' };
   
@@ -214,17 +214,13 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       zIndex: -1,
       borderStyle: 'solid',
       borderWidth: '1px',
-      borderColor: '#e2e8f0', // Default color for all sides
+      borderColor: '#e2e8f0', 
   };
 
   if (placedSide === 'top') {
       Object.assign(arrowStyle, { 
           bottom: '-6px', 
           left: 'calc(50% - 6px)', 
-          // A square rotated 45deg: top-left sides are top/left borders. bottom-right sides are bottom/right borders.
-          // If placed 'top' (above target), arrow points down. Down tip is bottom-right corner.
-          // So we need borderBottom and borderRight visible.
-          // Hide Top and Left.
           borderTopColor: 'transparent',
           borderLeftColor: 'transparent'
       });
@@ -232,8 +228,6 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       Object.assign(arrowStyle, { 
           top: '-6px', 
           left: 'calc(50% - 6px)',
-          // Placed below, points up. Up tip is top-left corner.
-          // Hide Bottom and Right.
           borderBottomColor: 'transparent', 
           borderRightColor: 'transparent'
       });
@@ -241,8 +235,6 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       Object.assign(arrowStyle, { 
           right: '-6px', 
           top: 'calc(50% - 6px)', 
-          // Placed left, points right. Right tip is top-right corner.
-          // Hide Bottom and Left.
           borderBottomColor: 'transparent', 
           borderLeftColor: 'transparent'
       });
@@ -250,8 +242,6 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       Object.assign(arrowStyle, { 
           left: '-6px', 
           top: 'calc(50% - 6px)', 
-          // Placed right, points left. Left tip is bottom-left corner.
-          // Hide Top and Right.
           borderTopColor: 'transparent', 
           borderRightColor: 'transparent'
       });

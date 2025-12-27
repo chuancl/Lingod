@@ -33,6 +33,7 @@ interface ActiveBubble {
     contextSentenceTrans?: string;
     contextParagraph?: string;
     contextParagraphTrans?: string;
+    sourceUrl?: string;
 }
 
 const ContentOverlay: React.FC<ContentOverlayProps> = ({ 
@@ -101,7 +102,7 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       return true;
   };
 
-  const addBubble = (entry: WordEntry, originalText: string, rect: DOMRect, triggerElement: HTMLElement, context?: { s?: string, st?: string, p?: string, pt?: string }) => {
+  const addBubble = (entry: WordEntry, originalText: string, rect: DOMRect, triggerElement: HTMLElement, context?: { s?: string, st?: string, p?: string, pt?: string, sourceUrl?: string }) => {
       const config = interactionConfigRef.current;
       if (hideTimers.current.has(entry.id)) {
           clearTimeout(hideTimers.current.get(entry.id)!);
@@ -119,7 +120,8 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
               contextSentence: context?.s,
               contextSentenceTrans: context?.st,
               contextParagraph: context?.p,
-              contextParagraphTrans: context?.pt
+              contextParagraphTrans: context?.pt,
+              sourceUrl: context?.sourceUrl
           };
 
           if (!config.allowMultipleBubbles) {
@@ -141,6 +143,27 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
       hideTimers.current.set(id, timer);
   };
 
+  const getCurrentVideoUrl = () => {
+      let url = window.location.href;
+      try {
+          const video = document.querySelector('video');
+          if (video && !video.paused) {
+              const time = Math.floor(video.currentTime);
+              const u = new URL(url);
+              if (u.hostname.includes('youtube.com')) {
+                  u.searchParams.set('t', `${time}s`);
+                  url = u.toString();
+              } else if (u.hostname.includes('bilibili.com')) {
+                  u.searchParams.set('t', `${time}`);
+                  url = u.toString();
+              }
+          }
+      } catch (e) {
+          console.warn("Failed to get video timestamp", e);
+      }
+      return url;
+  };
+
   const extractContext = (entryEl: HTMLElement) => {
       const s = entryEl.getAttribute('data-ctx-s') || '';
       const st = entryEl.getAttribute('data-ctx-st') || '';
@@ -154,7 +177,9 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
           pt = parentBlock.getAttribute('data-lingo-translation') || '';
       }
       
-      return { s, st, p, pt };
+      const sourceUrl = getCurrentVideoUrl();
+      
+      return { s, st, p, pt, sourceUrl };
   };
 
   useEffect(() => {
@@ -272,7 +297,8 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
                         sentence: bubble.contextSentence,
                         sentenceTrans: bubble.contextSentenceTrans,
                         paragraph: bubble.contextParagraph,
-                        paragraphTrans: bubble.contextParagraphTrans
+                        paragraphTrans: bubble.contextParagraphTrans,
+                        sourceUrl: bubble.sourceUrl
                     }}
                     onMouseEnter={() => handleBubbleMouseEnter(bubble.id)} 
                     onMouseLeave={() => scheduleRemoveBubble(bubble.id)} 
