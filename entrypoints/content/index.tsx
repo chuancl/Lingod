@@ -219,20 +219,24 @@ const ContentOverlay: React.FC<ContentOverlayProps> = ({
   return (
     <div className="reset-shadow-dom" style={{ all: 'initial', fontFamily: 'sans-serif' }}>
        <PageWidget config={widgetConfig} setConfig={(v) => pageWidgetConfigStorage.setValue(v)} pageWords={pageWords} setPageWords={setPageWords} onBatchAddToLearning={(ids) => ids.forEach(id => handleCaptureAndAdd(id))} />
-       {activeBubbles.map(bubble => (
-           <WordBubble 
-                key={bubble.id} 
-                entry={bubble.entry} 
-                originalText={bubble.originalText} 
-                targetRect={bubble.rect} 
-                config={interactionConfig} 
-                isVisible={true} 
-                onMouseEnter={() => handleBubbleMouseEnter(bubble.id)} 
-                onMouseLeave={() => scheduleRemoveBubble(bubble.id)} 
-                onUpdateCategory={handleUpdateWordCategory}
-                ttsSpeed={autoTranslateConfig.ttsSpeed} 
-            />
-       ))}
+       {activeBubbles.map(bubble => {
+           // Ensure we render with the most up-to-date entry data (e.g. if category changes)
+           const currentEntry = entries.find(e => e.id === bubble.id) || bubble.entry;
+           return (
+               <WordBubble 
+                    key={bubble.id} 
+                    entry={currentEntry} 
+                    originalText={bubble.originalText} 
+                    targetRect={bubble.rect} 
+                    config={interactionConfig} 
+                    isVisible={true} 
+                    onMouseEnter={() => handleBubbleMouseEnter(bubble.id)} 
+                    onMouseLeave={() => scheduleRemoveBubble(bubble.id)} 
+                    onUpdateCategory={handleUpdateWordCategory}
+                    ttsSpeed={autoTranslateConfig.ttsSpeed} 
+                />
+           );
+       })}
     </div>
   );
 };

@@ -42,18 +42,21 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
 }) => {
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
   const [placedSide, setPlacedSide] = useState<'top' | 'bottom' | 'left' | 'right'>('top');
+  const [hasMoved, setHasMoved] = useState(false); // Track if user has operated the move action
   const bubbleRef = useRef<HTMLDivElement>(null);
   const hasAutoPlayedRef = useRef(false);
 
   useEffect(() => {
-      // 当单词 ID 改变时，重置自动播放状态
+      // 当单词 ID 改变时，重置自动播放状态和移动状态
       hasAutoPlayedRef.current = false;
+      setHasMoved(false);
   }, [entry?.id]);
 
   useEffect(() => {
     if (!isVisible) {
       stopAudio();
       hasAutoPlayedRef.current = false;
+      setHasMoved(false); // Reset on hide
     }
     return () => { stopAudio(); };
   }, [isVisible]);
@@ -87,10 +90,10 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
 
   const handleMoveCategory = (e: React.MouseEvent, direction: 'prev' | 'next') => {
       e.stopPropagation();
-      if (!entry) return;
+      if (!entry || hasMoved) return;
 
       const currentIndex = CATEGORY_ORDER.indexOf(entry.category);
-      if (currentIndex === -1) return; // Should not happen if entry is valid
+      if (currentIndex === -1) return; 
 
       let nextIndex;
       if (direction === 'next') {
@@ -100,13 +103,13 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       }
 
       const nextCategory = CATEGORY_ORDER[nextIndex];
+      setHasMoved(true); // Disable arrows visually
       onUpdateCategory(entry.id, nextCategory);
   };
 
   const playAudio = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!entry) return;
-    // 点击喇叭图标同样执行智能朗读逻辑
     playWordAudio(entry.text, config.autoPronounceAccent, ttsSpeed);
   };
 
@@ -114,7 +117,6 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
      playSentenceAudio(text, undefined, config.autoPronounceAccent, ttsSpeed);
   };
 
-  // 跳转到详情页
   const openDetail = (e?: React.MouseEvent) => {
       e?.stopPropagation();
       if (!entry) return;
@@ -122,7 +124,6 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
       browser.runtime.sendMessage({ action: 'OPEN_OPTIONS_PAGE', path });
   };
 
-  // 跳转到词汇管理并搜索
   const openInManager = (e?: React.MouseEvent) => {
       e?.stopPropagation();
       if (!entry) return;
@@ -185,18 +186,45 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
   const nextLabel = CATEGORY_LABELS[nextCategory];
 
   const containerStyle: React.CSSProperties = { position: 'fixed', zIndex: 2147483647, backgroundColor: '#ffffff', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', border: '1px solid #e2e8f0', padding: '20px', width: '280px', boxSizing: 'border-box', top: position?.top ?? -9999, left: position?.left ?? -9999, opacity: position ? 1 : 0, transition: 'opacity 0.15s ease-out', pointerEvents: 'auto', fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif', fontSize: '16px', lineHeight: '1.5', color: '#0f172a', textAlign: 'left' };
+  
+  // Use expanded style properties to avoid React warnings about mixing shorthand 'border' with 'borderTopColor' etc.
   const arrowSize = 12;
-  const arrowStyle: React.CSSProperties = { position: 'absolute', width: `${arrowSize}px`, height: `${arrowSize}px`, backgroundColor: '#ffffff', transform: 'rotate(45deg)', border: '1px solid #e2e8f0', zIndex: -1 };
-  if (placedSide === 'top') Object.assign(arrowStyle, { bottom: '-6px', left: 'calc(50% - 6px)', borderTopColor: 'transparent', borderLeftColor: 'transparent' });
-  else if (placedSide === 'bottom') Object.assign(arrowStyle, { top: '-6px', left: 'calc(50% - 6px)', borderBottomColor: 'transparent', borderRightColor: 'transparent' });
-  else if (placedSide === 'left') Object.assign(arrowStyle, { right: '-6px', top: 'calc(50% - 6px)', borderBottomColor: 'transparent', borderLeftColor: 'transparent' });
-  else if (placedSide === 'right') Object.assign(arrowStyle, { left: '-6px', top: 'calc(50% - 6px)', borderTopColor: 'transparent', borderRightColor: 'transparent' });
+  const arrowStyle: React.CSSProperties = { 
+      position: 'absolute', 
+      width: `${arrowSize}px`, 
+      height: `${arrowSize}px`, 
+      backgroundColor: '#ffffff', 
+      transform: 'rotate(45deg)', 
+      zIndex: -1,
+      borderWidth: '1px',
+      borderStyle: 'solid',
+      borderColor: '#e2e8f0'
+  };
+
+  if (placedSide === 'top') {
+      Object.assign(arrowStyle, { bottom: '-6px', left: 'calc(50% - 6px)', borderTopColor: 'transparent', borderLeftColor: 'transparent' });
+  } else if (placedSide === 'bottom') {
+      Object.assign(arrowStyle, { top: '-6px', left: 'calc(50% - 6px)', borderBottomColor: 'transparent', borderRightColor: 'transparent' });
+  } else if (placedSide === 'left') {
+      Object.assign(arrowStyle, { right: '-6px', top: 'calc(50% - 6px)', borderBottomColor: 'transparent', borderLeftColor: 'transparent' });
+  } else if (placedSide === 'right') {
+      Object.assign(arrowStyle, { left: '-6px', top: 'calc(50% - 6px)', borderTopColor: 'transparent', borderRightColor: 'transparent' });
+  }
 
   const headerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', lineHeight: 1 };
   const wordStyle: React.CSSProperties = { fontSize: '20px', fontWeight: '700', color: '#0f172a', margin: '0 0 4px 0', lineHeight: '1.2', cursor: 'pointer', transition: 'color 0.2s', textDecoration: 'underline', textDecorationColor: 'transparent' };
   const phoneticStyle: React.CSSProperties = { fontSize: '12px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace', color: '#94a3b8', display: 'block' };
   const btnStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px', borderRadius: '9999px', border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', transition: 'background-color 0.2s, color 0.2s' };
-  const arrowBtnStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #e2e8f0', background: '#f8fafc', cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' };
+  
+  // Dynamic arrow button style based on hasMoved state
+  const arrowBtnStyle: React.CSSProperties = { 
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', borderRadius: '6px', border: '1px solid #e2e8f0', 
+      background: hasMoved ? '#f1f5f9' : '#f8fafc', 
+      cursor: hasMoved ? 'default' : 'pointer', 
+      color: hasMoved ? '#cbd5e1' : '#64748b', 
+      transition: 'all 0.2s',
+      opacity: hasMoved ? 0.6 : 1
+  };
   
   const meaningStyle: React.CSSProperties = { fontSize: '14px', fontWeight: '500', color: '#334155', marginBottom: '12px', lineHeight: '1.4' };
   const originalBoxStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', fontSize: '12px', backgroundColor: '#f8fafc', padding: '6px 12px', borderRadius: '6px', marginBottom: '12px', border: '1px solid #f1f5f9', color: '#334155' };
@@ -230,18 +258,20 @@ export const WordBubble: React.FC<WordBubbleProps> = ({
                     <button 
                         onClick={(e) => handleMoveCategory(e, 'prev')} 
                         style={arrowBtnStyle} 
-                        title={`移动到${prevLabel}`}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e2e8f0'; e.currentTarget.style.color = '#0f172a'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
+                        disabled={hasMoved}
+                        title={hasMoved ? "已移动" : `移动到${prevLabel}`}
+                        onMouseEnter={(e) => { if(!hasMoved) { e.currentTarget.style.backgroundColor = '#e2e8f0'; e.currentTarget.style.color = '#0f172a'; } }}
+                        onMouseLeave={(e) => { if(!hasMoved) { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#64748b'; } }}
                     >
                         <ChevronLeft size={14} />
                     </button>
                     <button 
                         onClick={(e) => handleMoveCategory(e, 'next')} 
                         style={arrowBtnStyle} 
-                        title={`移动到${nextLabel}`}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#e2e8f0'; e.currentTarget.style.color = '#0f172a'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#64748b'; }}
+                        disabled={hasMoved}
+                        title={hasMoved ? "已移动" : `移动到${nextLabel}`}
+                        onMouseEnter={(e) => { if(!hasMoved) { e.currentTarget.style.backgroundColor = '#e2e8f0'; e.currentTarget.style.color = '#0f172a'; } }}
+                        onMouseLeave={(e) => { if(!hasMoved) { e.currentTarget.style.backgroundColor = '#f8fafc'; e.currentTarget.style.color = '#64748b'; } }}
                     >
                         <ChevronRight size={14} />
                     </button>
